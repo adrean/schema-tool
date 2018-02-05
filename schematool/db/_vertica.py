@@ -57,11 +57,12 @@ class VerticaDb(Db):
                 cursor.execute(query)
             results = []
 
-            if cursor.rowcount > 0:
-                try:
-                    results = cursor.fetchall()
-                except vertica_python.ProgrammingError, e:
-                    raise vertica_python.ProgrammingError(e.message)
+            # rowcount issue is explained on vertica_python documentation
+            # see https://github.com/uber/vertica-python/issues/77#issuecomment-141735332
+            try:
+                results = cursor.fetchall()
+            except vertica_python.ProgrammingError, e:
+                raise vertica_python.ProgrammingError(e.message)
             cls.conn.commit()
             return results
         except Exception, e:
@@ -83,7 +84,7 @@ class VerticaDb(Db):
         # created after the existence check but before the CREATE statement.
         check = "SELECT EXISTS(SELECT 1 FROM v_catalog.SCHEMATA WHERE schema_name = %s)"
         result = cls.execute(check, (cls.config['revision_schema_name'],))
-        if result[0] == [True]:
+        if len(result) > 0 and result[0] == True:
             return
         else:
             return cls.execute('CREATE SCHEMA IF NOT EXISTS %s' % cls.config['revision_schema_name'])
@@ -147,7 +148,7 @@ class VerticaDb(Db):
                 except KeyError:
                     pass
 
-            conn = vertica_python.connect(conn_driver_dict)
+            conn = vertica_python.connect(**conn_driver_dict)
         except Exception, e:
             raise DbError("Cannot connect to Vertica Db: %s\n"
                           "Ensure that the server is running and you can connect normally"
